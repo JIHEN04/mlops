@@ -1,4 +1,5 @@
 import argparse
+import os
 import subprocess
 import sys
 
@@ -6,12 +7,23 @@ from prefect import flow, task
 
 import model_pipeline as mp
 
+REPO_URL = "https://github.com/JIHEN04/mlops.git"
+REPO_DIR = "mlops_repo"
+
 FILES = ["model_pipeline.py", "main.py", "pipeline_prefect.py"]
 
 
 def run(cmd):
     """Lance une commande, et fait échouer la task en cas d'erreur."""
     subprocess.run(cmd, check=True)  # nosec B603
+
+
+@task(name="Récupérer le projet (git)")
+def clone_repo():
+    if os.path.isdir(os.path.join(REPO_DIR, ".git")):
+        run(["git", "-C", REPO_DIR, "pull"])
+    else:
+        run(["git", "clone", REPO_URL, REPO_DIR])
 
 
 # ---------- Tasks : dépendances et qualité du code ----------
@@ -70,11 +82,13 @@ def evaluate_model(model, x_test, y_test):
 # ---------- Flows ----------
 @flow(name="install")
 def install_flow():
+    clone_repo()
     install_dependencies()
 
 
 @flow(name="code")
 def code_flow():
+    clone_repo()
     install_dependencies()
     format_code()
     check_quality()
@@ -99,6 +113,7 @@ def evaluate_flow():
 
 @flow(name="all")
 def all_flow():
+    clone_repo()
     # étapes liées au code, avant la préparation des données
     install_dependencies()
     format_code()
